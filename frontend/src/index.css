@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-bg: #faf9f7;
+  --color-bg-card: #ffffff;
+  --color-bg-sidebar: #f3f1ee;
+  --color-bg-input: #ffffff;
+  --color-border: #e2dfd9;
+  --color-text: #1a1a1a;
+  --color-text-muted: #6b6560;
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-light: #dbeafe;
+  --color-danger: #dc2626;
+  --color-danger-hover: #b91c1c;
+  --color-success: #16a34a;
+  --color-accent: #7c3aed;
+}
+
+.dark {
+  --color-bg: #0f0f0f;
+  --color-bg-card: #1a1a1a;
+  --color-bg-sidebar: #141414;
+  --color-bg-input: #1f1f1f;
+  --color-border: #2a2a2a;
+  --color-text: #e8e6e3;
+  --color-text-muted: #9a9590;
+  --color-primary: #60a5fa;
+  --color-primary-hover: #3b82f6;
+  --color-primary-light: #1e293b;
+  --color-danger: #f87171;
+  --color-danger-hover: #ef4444;
+  --color-success: #4ade80;
+  --color-accent: #a78bfa;
+}
+
+.high-contrast {
+  --color-bg: #000000;
+  --color-bg-card: #0a0a0a;
+  --color-bg-sidebar: #050505;
+  --color-bg-input: #111111;
+  --color-border: #555555;
+  --color-text: #ffffff;
+  --color-text-muted: #cccccc;
+  --color-primary: #5ebbff;
+  --color-primary-hover: #3aa5ff;
+  --color-primary-light: #0d2137;
+  --color-danger: #ff6b6b;
+  --color-danger-hover: #ff4444;
+  --color-success: #5eff8a;
+  --color-accent: #c4a1ff;
+}
+
+.sepia {
+  --color-bg: #f5f0e8;
+  --color-bg-card: #faf6ef;
+  --color-bg-sidebar: #ede7db;
+  --color-bg-input: #faf6ef;
+  --color-border: #d4cbbe;
+  --color-text: #3d3229;
+  --color-text-muted: #7a6e5f;
+  --color-primary: #8b5e3c;
+  --color-primary-hover: #724d31;
+  --color-primary-light: #f0e4d4;
+  --color-danger: #c0392b;
+  --color-danger-hover: #a93226;
+  --color-success: #27ae60;
+  --color-accent: #8e44ad;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s, color 0.2s;
+}
