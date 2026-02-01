@@ -5,14 +5,12 @@ from fastapi.responses import Response
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from sheaf.config import settings
 from sheaf.database import get_db
-from sheaf.dependencies import get_current_user, get_storage
+from sheaf.dependencies import get_current_user, get_user_storage, get_document_storage
 from sheaf.models.document import Document
 from sheaf.models.user import User
 from sheaf.schemas.document import DocumentList, DocumentRead
 from sheaf.services.cache import cache_delete, cache_get, cache_set
-from sheaf.services.storage.base import StorageBackend
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
@@ -23,7 +21,6 @@ async def upload_pdf(
     is_public: bool = False,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
-    storage: StorageBackend = Depends(get_storage),
 ):
     if file.content_type != "application/pdf":
         raise HTTPException(
@@ -33,6 +30,7 @@ async def upload_pdf(
 
     data = await file.read()
     stored_name = f"{uuid.uuid4().hex}.pdf"
+    storage = get_user_storage(user)
     storage_path = await storage.save(stored_name, data)
 
     doc = Document(
@@ -40,7 +38,7 @@ async def upload_pdf(
         original_name=file.filename or "untitled.pdf",
         content_type=file.content_type,
         size_bytes=len(data),
-        storage_backend=settings.storage_backend,
+        storage_backend=user.storage_backend,
         storage_path=storage_path,
         is_public=is_public,
         owner_id=user.id,
@@ -83,7 +81,6 @@ async def download_document(
     doc_id: str,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
-    storage: StorageBackend = Depends(get_storage),
 ):
     doc = await _get_doc_or_404(db, doc_id, user)
 
@@ -92,6 +89,7 @@ async def download_document(
     if cached is not None:
         data = cached
     else:
+        storage = await get_document_storage(doc, db)
         data = await storage.load(doc.storage_path)
         await cache_set(cache_key, data)
 
@@ -110,7 +108,6 @@ async def view_document(
     doc_id: str,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
-    storage: StorageBackend = Depends(get_storage),
 ):
     doc = await _get_doc_or_404(db, doc_id, user)
 
@@ -119,6 +116,7 @@ async def view_document(
     if cached is not None:
         data = cached
     else:
+        storage = await get_document_storage(doc, db)
         data = await storage.load(doc.storage_path)
         await cache_set(cache_key, data)
 
@@ -134,9 +132,9 @@ async def delete_document(
     doc_id: str,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
-    storage: StorageBackend = Depends(get_storage),
 ):
     doc = await _get_doc_or_404(db, doc_id, user)
+    storage = await get_document_storage(doc, db)
     await storage.delete(doc.storage_path)
     await cache_delete(f"pdf:{doc.id}")
     await db.delete(doc)

@@ -4,11 +4,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sheaf.database import get_db
-from sheaf.dependencies import get_storage
+from sheaf.dependencies import get_document_storage
 from sheaf.models.document import Document
 from sheaf.schemas.document import DocumentRead
 from sheaf.services.cache import cache_get, cache_set
-from sheaf.services.storage.base import StorageBackend
 
 router = APIRouter(prefix="/api/public", tags=["public"])
 
@@ -23,7 +22,6 @@ async def get_public_document(doc_id: str, db: AsyncSession = Depends(get_db)):
 async def download_public_document(
     doc_id: str,
     db: AsyncSession = Depends(get_db),
-    storage: StorageBackend = Depends(get_storage),
 ):
     doc = await _get_public_or_404(db, doc_id)
 
@@ -32,6 +30,7 @@ async def download_public_document(
     if cached is not None:
         data = cached
     else:
+        storage = await get_document_storage(doc, db)
         data = await storage.load(doc.storage_path)
         await cache_set(cache_key, data)
 

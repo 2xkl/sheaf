@@ -24,6 +24,7 @@ export default function Dashboard() {
           }
         }),
       );
+      enriched.sort((a, b) => new Date(b.last_read_at).getTime() - new Date(a.last_read_at).getTime());
       setRecentReads(enriched);
     });
   }, []);
@@ -61,13 +62,13 @@ export default function Dashboard() {
               <button
                 key={r.document_id}
                 onClick={() => navigate(`/read/${r.document_id}`)}
-                className="w-full px-5 py-3 flex items-center gap-4 hover:bg-(--color-bg-sidebar) transition-colors text-left cursor-pointer"
+                className="w-full px-4 md:px-5 py-3 flex items-center gap-3 md:gap-4 hover:bg-(--color-bg-sidebar) transition-colors text-left cursor-pointer"
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">
                     {r.doc?.original_name ?? r.document_id}
                   </p>
-                  <div className="mt-1 flex items-center gap-2">
+                  <div className="mt-1.5 flex items-center gap-2">
                     <div className="flex-1 h-1.5 bg-(--color-border) rounded-full overflow-hidden max-w-[200px]">
                       <div
                         className="h-full bg-(--color-primary) rounded-full"
@@ -76,12 +77,12 @@ export default function Dashboard() {
                         }}
                       />
                     </div>
-                    <span className="text-xs text-(--color-text-muted)">
-                      p. {r.current_page} of {r.total_pages}
+                    <span className="text-xs text-(--color-text-muted) whitespace-nowrap">
+                      p. {r.current_page} / {r.total_pages}
                     </span>
                   </div>
                 </div>
-                <span className="text-xs text-(--color-text-muted) whitespace-nowrap">
+                <span className="text-xs text-(--color-text-muted) whitespace-nowrap hidden sm:block">
                   {new Date(r.last_read_at).toLocaleDateString('en-US')}
                 </span>
               </button>

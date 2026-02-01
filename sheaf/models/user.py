@@ -19,4 +19,9 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
+    # Per-user storage configuration
+    storage_backend: Mapped[str] = mapped_column(String(20), default="local")
+    azure_connection_string: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    azure_container_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
     documents: Mapped[list["Document"]] = relationship(back_populates="owner")  # noqa: F821

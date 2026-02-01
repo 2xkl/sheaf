@@ -36,10 +36,49 @@ async def require_admin(user: User = Depends(get_current_user)) -> User:
     return user
 
 
-def get_storage() -> StorageBackend:
-    if settings.storage_backend == "azure":
+def get_user_storage(user: User) -> StorageBackend:
+    """Return storage backend based on the user's preference (for uploads)."""
+    if user.storage_backend == "azure" and user.azure_connection_string:
         return AzureBlobStorage(
-            connection_string=settings.azure_storage_connection_string,
-            container_name=settings.azure_storage_container,
+            connection_string=user.azure_connection_string,
+            container_name=user.azure_container_name or settings.azure_storage_container,
         )
     return LocalStorage(base_path=settings.local_storage_path)
+
+
+async def get_document_storage(doc, db: AsyncSession) -> StorageBackend:
+    """Return storage backend for an existing document (for download/view/delete).
+
+    Resolves Azure credentials from the document owner when needed.
+    Falls back to global env credentials for pre-migration documents.
+    """
+    from sheaf.models.document import Document
+
+    if doc.storage_backend == "local":
+        return LocalStorage(base_path=settings.local_storage_path)
+
+    if doc.storage_backend == "azure":
+        result = await db.execute(select(User).where(User.id == doc.owner_id))
+        owner = result.scalar_one_or_none()
+
+        if owner and owner.azure_connection_string:
+            return AzureBlobStorage(
+                connection_string=owner.azure_connection_string,
+                container_name=owner.azure_container_name or settings.azure_storage_container,
+            )
+
+        if settings.azure_storage_connection_string:
+            return AzureBlobStorage(
+                connection_string=settings.azure_storage_connection_string,
+                container_name=settings.azure_storage_container,
+            )
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Azure storage credentials not available for this document",
+        )
+
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=f"Unknown storage backend: {doc.storage_backend}",
+    )

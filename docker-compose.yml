@@ -10,6 +10,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
 
   frontend:
     build: ./frontend
@@ -17,6 +19,20 @@ services:
       - "3100:3000"
     depends_on:
       - app
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: sheaf
+      POSTGRES_PASSWORD: sheaf
+      POSTGRES_DB: sheaf
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sheaf"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -28,3 +44,4 @@ services:
 
 volumes:
   pdf_storage:
+  pg_data:

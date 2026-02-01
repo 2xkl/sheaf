@@ -1,9 +1,14 @@
 import { NavLink } from 'react-router-dom';
-import { FileText, Upload, LayoutDashboard, Users, BarChart3, LogOut } from 'lucide-react';
+import { FileText, Upload, LayoutDashboard, Users, BarChart3, LogOut, X, Settings } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import ThemeSwitcher from './ThemeSwitcher';
 
-export default function Sidebar() {
+interface SidebarProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+export default function Sidebar({ open, onClose }: SidebarProps) {
   const { user, logout } = useAuth();
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
@@ -13,24 +18,39 @@ export default function Sidebar() {
         : 'text-(--color-text-muted) hover:bg-(--color-bg-card) hover:text-(--color-text)'
     }`;
 
-  return (
-    <aside className="w-64 h-screen bg-(--color-bg-sidebar) border-r border-(--color-border) flex flex-col fixed left-0 top-0">
-      <div className="p-6">
-        <h1 className="text-xl font-bold tracking-tight">
-          <span className="text-(--color-primary)">sheaf</span>
-        </h1>
-        <p className="text-xs text-(--color-text-muted) mt-1">PDF hosting platform</p>
+  const handleNavClick = () => {
+    onClose();
+  };
+
+  const sidebar = (
+    <aside className="w-64 h-screen bg-(--color-bg-sidebar) border-r border-(--color-border) flex flex-col">
+      <div className="p-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight">
+            <span className="text-(--color-primary)">sheaf</span>
+          </h1>
+          <p className="text-xs text-(--color-text-muted) mt-1">PDF hosting platform</p>
+        </div>
+        <button
+          onClick={onClose}
+          className="md:hidden p-1.5 rounded-lg text-(--color-text-muted) hover:bg-(--color-bg-card) transition-colors cursor-pointer"
+        >
+          <X size={20} />
+        </button>
       </div>
 
       <nav className="flex-1 px-3 space-y-1">
-        <NavLink to="/dashboard" className={linkClass}>
+        <NavLink to="/dashboard" className={linkClass} onClick={handleNavClick}>
           <LayoutDashboard size={18} /> Dashboard
         </NavLink>
-        <NavLink to="/documents" className={linkClass}>
+        <NavLink to="/documents" className={linkClass} onClick={handleNavClick}>
           <FileText size={18} /> Documents
         </NavLink>
-        <NavLink to="/upload" className={linkClass}>
+        <NavLink to="/upload" className={linkClass} onClick={handleNavClick}>
           <Upload size={18} /> Upload
+        </NavLink>
+        <NavLink to="/settings" className={linkClass} onClick={handleNavClick}>
+          <Settings size={18} /> Settings
         </NavLink>
 
         {user?.is_admin && (
@@ -40,10 +60,10 @@ export default function Sidebar() {
                 Admin
               </span>
             </div>
-            <NavLink to="/admin/users" className={linkClass}>
+            <NavLink to="/admin/users" className={linkClass} onClick={handleNavClick}>
               <Users size={18} /> Users
             </NavLink>
-            <NavLink to="/admin/stats" className={linkClass}>
+            <NavLink to="/admin/stats" className={linkClass} onClick={handleNavClick}>
               <BarChart3 size={18} /> Statistics
             </NavLink>
           </>
@@ -69,5 +89,24 @@ export default function Sidebar() {
         </div>
       </div>
     </aside>
+  );
+
+  return (
+    <>
+      {/* Desktop: fixed sidebar, always visible */}
+      <div className="hidden md:block fixed left-0 top-0 z-30">
+        {sidebar}
+      </div>
+
+      {/* Mobile: overlay sidebar */}
+      {open && (
+        <div className="md:hidden fixed inset-0 z-40">
+          <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+          <div className="relative z-50 animate-slide-in">
+            {sidebar}
+          </div>
+        </div>
+      )}
+    </>
   );
 }

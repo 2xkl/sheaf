@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Document, Page, pdfjs } from 'react-pdf';
-import 'react-pdf/dist/Page/AnnotationLayer.css';
-import 'react-pdf/dist/Page/TextLayer.css';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -10,25 +7,34 @@ import {
   Minus,
   Plus,
   Loader2,
+  AlertTriangle,
+  Maximize,
+  Minimize,
 } from 'lucide-react';
+import * as pdfjsLib from 'pdfjs-dist';
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import api, { docsApi, progressApi, type Document as DocType } from '../lib/api';
 
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url,
-).toString();
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 export default function ReaderPage() {
   const { docId } = useParams<{ docId: string }>();
   const navigate = useNavigate();
 
   const [doc, setDoc] = useState<DocType | null>(null);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [numPages, setNumPages] = useState(0);
   const [page, setPage] = useState(1);
-  const [scale, setScale] = useState(1.2);
+  const [scale, setScale] = useState(1.5);
   const [loading, setLoading] = useState(true);
+  const [rendering, setRendering] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [immersive, setImmersive] = useState(false);
 
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const pdfDocRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
+  const renderTaskRef = useRef<ReturnType<pdfjsLib.PDFPageProxy['render']> | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pageRef = useRef(page);
   const numPagesRef = useRef(numPages);
@@ -36,7 +42,50 @@ export default function ReaderPage() {
   pageRef.current = page;
   numPagesRef.current = numPages;
 
-  // Load document metadata, progress, and PDF data
+  // Fullscreen API helpers
+  const canFullscreen = typeof document.documentElement.requestFullscreen === 'function';
+
+  const enterFullscreen = useCallback(() => {
+    setImmersive(true);
+    if (canFullscreen && wrapperRef.current) {
+      wrapperRef.current.requestFullscreen().catch(() => {});
+    }
+  }, [canFullscreen]);
+
+  const exitFullscreen = useCallback(() => {
+    setImmersive(false);
+    if (canFullscreen && document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
+  }, [canFullscreen]);
+
+  // Sync immersive state when user exits fullscreen via Escape / browser UI
+  useEffect(() => {
+    const handleChange = () => {
+      if (!document.fullscreenElement) {
+        setImmersive(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', handleChange);
+    return () => document.removeEventListener('fullscreenchange', handleChange);
+  }, []);
+
+  // Tap on canvas area toggles immersive mode
+  const handleCanvasTap = useCallback(
+    (e: React.MouseEvent | React.TouchEvent) => {
+      // Only toggle on direct taps (not on controls inside the area)
+      if (e.target === containerRef.current || e.target === canvasRef.current) {
+        if (immersive) {
+          exitFullscreen();
+        } else {
+          enterFullscreen();
+        }
+      }
+    },
+    [immersive, enterFullscreen, exitFullscreen],
+  );
+
+  // Load PDF document
   useEffect(() => {
     if (!docId) return;
 
@@ -46,22 +95,107 @@ export default function ReaderPage() {
       return;
     }
 
-    Promise.all([
-      docsApi.get(docId),
-      progressApi.get(docId),
-      api.get(`/documents/${docId}/view`, { responseType: 'blob' }),
-    ]).then(
-      ([docRes, progRes, pdfRes]) => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const [docRes, progRes, pdfRes] = await Promise.all([
+          docsApi.get(docId),
+          progressApi.get(docId).catch(() => ({ data: null })),
+          api.get(`/documents/${docId}/view`, { responseType: 'arraybuffer' }),
+        ]);
+
+        if (cancelled) return;
+
         setDoc(docRes.data);
-        if (progRes.data && progRes.data.current_page > 0) {
-          setPage(progRes.data.current_page);
-        }
-        const blob = new Blob([pdfRes.data], { type: 'application/pdf' });
-        setPdfUrl(URL.createObjectURL(blob));
+
+        const pdfDoc = await pdfjsLib.getDocument({ data: pdfRes.data }).promise;
+        if (cancelled) return;
+
+        pdfDocRef.current = pdfDoc;
+        setNumPages(pdfDoc.numPages);
+
+        const startPage =
+          progRes.data && progRes.data.current_page > 0
+            ? Math.min(progRes.data.current_page, pdfDoc.numPages)
+            : 1;
+        setPage(startPage);
+
+        progressApi.save(docId, startPage, pdfDoc.numPages).catch(() => {});
+
         setLoading(false);
-      },
-    );
+      } catch (err: unknown) {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : 'Failed to load PDF';
+        console.error('ReaderPage load error:', err);
+        setError(msg);
+        setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [docId, navigate]);
+
+  // Render current page to canvas
+  useEffect(() => {
+    const pdfDoc = pdfDocRef.current;
+    const canvas = canvasRef.current;
+    if (!pdfDoc || !canvas || numPages === 0) return;
+
+    let cancelled = false;
+
+    (async () => {
+      if (renderTaskRef.current) {
+        renderTaskRef.current.cancel();
+        renderTaskRef.current = null;
+      }
+
+      setRendering(true);
+
+      try {
+        const pdfPage = await pdfDoc.getPage(page);
+        if (cancelled) return;
+
+        const viewport = pdfPage.getViewport({ scale });
+        const ctx = canvas.getContext('2d')!;
+
+        const dpr = window.devicePixelRatio || 1;
+
+        canvas.width = viewport.width * dpr;
+        canvas.height = viewport.height * dpr;
+
+        const container = containerRef.current;
+        const maxDisplayWidth = container
+          ? container.clientWidth - 32
+          : viewport.width;
+        const displayWidth = Math.min(viewport.width, maxDisplayWidth);
+        const displayScale = displayWidth / viewport.width;
+        const displayHeight = viewport.height * displayScale;
+
+        canvas.style.width = `${displayWidth}px`;
+        canvas.style.height = `${displayHeight}px`;
+
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        const renderTask = pdfPage.render({ canvasContext: ctx, viewport } as never);
+        renderTaskRef.current = renderTask;
+        await renderTask.promise;
+
+        if (!cancelled) setRendering(false);
+      } catch (err: unknown) {
+        if (!cancelled && err instanceof Error && err.name !== 'RenderingCancelledException') {
+          console.error('Render error:', err);
+          setRendering(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [page, scale, numPages]);
 
   // Save progress (debounced)
   const saveProgress = useCallback(() => {
@@ -69,26 +203,21 @@ export default function ReaderPage() {
     progressApi.save(docId, pageRef.current, numPagesRef.current).catch(() => {});
   }, [docId]);
 
-  // Debounce page change saves
   useEffect(() => {
     if (numPages === 0) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(saveProgress, 1000);
   }, [page, numPages, saveProgress]);
 
-  // Save on unmount + revoke blob URL
+  // Save on unmount + cleanup
   useEffect(() => {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       saveProgress();
+      if (renderTaskRef.current) renderTaskRef.current.cancel();
+      if (pdfDocRef.current) pdfDocRef.current.destroy();
     };
   }, [saveProgress]);
-
-  useEffect(() => {
-    return () => {
-      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
-    };
-  }, [pdfUrl]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -99,18 +228,48 @@ export default function ReaderPage() {
       } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
         e.preventDefault();
         setPage((p) => Math.min(numPagesRef.current, p + 1));
+      } else if (e.key === 'Escape' && immersive) {
+        exitFullscreen();
+      } else if (e.key === 'f' || e.key === 'F') {
+        if (immersive) exitFullscreen();
+        else enterFullscreen();
       }
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, []);
+  }, [immersive, enterFullscreen, exitFullscreen]);
+
+  // Swipe navigation on mobile
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchStartRef.current = { x: t.clientX, y: t.clientY };
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStartRef.current.x;
+    const dy = t.clientY - touchStartRef.current.y;
+    touchStartRef.current = null;
+
+    // Only horizontal swipes, not taps or vertical scrolls
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (dx < 0) {
+        setPage((p) => Math.min(numPagesRef.current, p + 1));
+      } else {
+        setPage((p) => Math.max(1, p - 1));
+      }
+    }
+  };
 
   const goBack = () => {
     saveProgress();
     navigate(-1);
   };
 
-  if (loading || !docId || !pdfUrl) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-bg flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
@@ -118,10 +277,35 @@ export default function ReaderPage() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="min-h-screen bg-bg flex flex-col items-center justify-center gap-4 px-4">
+        <AlertTriangle className="w-10 h-10 text-danger" />
+        <p className="text-text text-center font-medium">Failed to load PDF</p>
+        <p className="text-text-muted text-sm text-center max-w-md">{error}</p>
+        <button
+          onClick={() => navigate(-1)}
+          className="mt-2 px-4 py-2 bg-primary text-white rounded hover:opacity-90 transition-opacity"
+        >
+          Go back
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-bg flex flex-col">
+    <div
+      ref={wrapperRef}
+      className="bg-bg flex flex-col"
+      style={{ height: '100dvh' }}
+    >
       {/* Top toolbar */}
-      <div className="h-12 bg-bg-card border-b border-border flex items-center px-4 gap-4 shrink-0">
+      <div
+        className={`bg-bg-card border-b border-border flex items-center px-3 md:px-4 gap-2 md:gap-4 shrink-0 transition-all duration-300 overflow-hidden ${
+          immersive ? 'max-h-0 border-b-0' : 'max-h-20'
+        }`}
+        style={!immersive ? { paddingTop: 'env(safe-area-inset-top, 0px)', minHeight: '3rem' } : { minHeight: 0 }}
+      >
         <button
           onClick={goBack}
           className="p-1.5 rounded hover:bg-bg transition-colors text-text-muted hover:text-text"
@@ -133,63 +317,74 @@ export default function ReaderPage() {
           {doc?.original_name ?? 'PDF'}
         </span>
 
-        <div className="flex items-center gap-2 text-sm text-text-muted">
-          <span>
+        <div className="flex items-center gap-1 text-sm text-text-muted">
+          <span className="hidden sm:inline">
             {page} / {numPages}
           </span>
+          <span className="sm:hidden text-xs">
+            {page}/{numPages}
+          </span>
         </div>
+
+        <button
+          onClick={enterFullscreen}
+          className="p-1.5 rounded hover:bg-bg transition-colors text-text-muted hover:text-text"
+          title="Focus mode (F)"
+        >
+          <Maximize className="w-4 h-4" />
+        </button>
       </div>
 
-      {/* PDF content */}
-      <div className="flex-1 overflow-auto flex justify-center py-4">
-        <Document
-          file={pdfUrl}
-          onLoadSuccess={({ numPages: n }) => setNumPages(n)}
-          loading={
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-8 h-8 text-primary animate-spin" />
-            </div>
-          }
-          error={
-            <div className="text-danger text-center py-20">
-              Failed to load PDF
-            </div>
-          }
-        >
-          <Page
-            pageNumber={page}
-            scale={scale}
-            loading={
-              <div className="flex items-center justify-center py-20">
-                <Loader2 className="w-6 h-6 text-primary animate-spin" />
-              </div>
-            }
-          />
-        </Document>
+      {/* PDF canvas — tap to toggle toolbars */}
+      <div
+        ref={containerRef}
+        className="flex-1 overflow-auto flex justify-center items-start py-4 bg-neutral-800 relative cursor-pointer"
+        onClick={handleCanvasTap}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        {rendering && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10">
+            <Loader2 className="w-5 h-5 text-white animate-spin" />
+          </div>
+        )}
+        <canvas ref={canvasRef} />
+
+        {/* Immersive mode: floating page indicator */}
+        {immersive && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs px-3 py-1.5 rounded-full backdrop-blur-sm">
+            {page} / {numPages}
+          </div>
+        )}
       </div>
 
       {/* Bottom toolbar */}
-      <div className="h-12 bg-bg-card border-t border-border flex items-center justify-center gap-4 shrink-0 px-4">
+      <div
+        className={`bg-bg-card border-t border-border flex items-center justify-center gap-2 md:gap-4 shrink-0 px-3 md:px-4 transition-all duration-300 overflow-hidden ${
+          immersive ? 'max-h-0 border-t-0' : 'max-h-20'
+        }`}
+        style={!immersive ? { paddingBottom: 'env(safe-area-inset-bottom, 0px)', minHeight: '3rem' } : { minHeight: 0 }}
+      >
         {/* Zoom controls */}
         <button
-          onClick={() => setScale((s) => Math.max(0.5, s - 0.2))}
+          onClick={() => setScale((s) => Math.max(0.5, +(s - 0.2).toFixed(1)))}
           className="p-1.5 rounded hover:bg-bg transition-colors text-text-muted hover:text-text"
           title="Zoom out"
         >
           <Minus className="w-4 h-4" />
         </button>
-        <span className="text-xs text-text-muted w-12 text-center">
+        <span className="text-xs text-text-muted w-10 text-center">
           {Math.round(scale * 100)}%
         </span>
         <button
-          onClick={() => setScale((s) => Math.min(3, s + 0.2))}
+          onClick={() => setScale((s) => Math.min(3, +(s + 0.2).toFixed(1)))}
           className="p-1.5 rounded hover:bg-bg transition-colors text-text-muted hover:text-text"
           title="Zoom in"
         >
           <Plus className="w-4 h-4" />
         </button>
 
-        <div className="w-px h-6 bg-border mx-2" />
+        <div className="w-px h-6 bg-border mx-1 md:mx-2" />
 
         {/* Page navigation */}
         <button
@@ -210,9 +405,9 @@ export default function ReaderPage() {
               const v = parseInt(e.target.value, 10);
               if (v >= 1 && v <= numPages) setPage(v);
             }}
-            className="w-14 text-center text-sm bg-bg-input border border-border rounded px-1 py-0.5 text-text focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-12 text-center text-sm bg-bg-input border border-border rounded px-1 py-0.5 text-text focus:outline-none focus:ring-1 focus:ring-primary"
           />
-          <span className="text-sm text-text-muted">of {numPages}</span>
+          <span className="text-xs md:text-sm text-text-muted">of {numPages}</span>
         </div>
 
         <button
@@ -221,6 +416,16 @@ export default function ReaderPage() {
           className="p-1.5 rounded hover:bg-bg transition-colors text-text-muted hover:text-text disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <ChevronRight className="w-5 h-5" />
+        </button>
+
+        <div className="w-px h-6 bg-border mx-1 md:mx-2" />
+
+        <button
+          onClick={exitFullscreen}
+          className="p-1.5 rounded hover:bg-bg transition-colors text-text-muted hover:text-text md:hidden"
+          title="Exit focus mode"
+        >
+          <Minimize className="w-4 h-4" />
         </button>
       </div>
     </div>

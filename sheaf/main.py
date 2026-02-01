@@ -42,12 +42,14 @@ app = FastAPI(
 )
 
 from sheaf.routers import auth, documents, admin, public, reading_progress  # noqa: E402
+from sheaf.routers import settings as settings_router  # noqa: E402
 
 app.include_router(auth.router)
 app.include_router(documents.router)
 app.include_router(admin.router)
 app.include_router(public.router)
 app.include_router(reading_progress.router)
+app.include_router(settings_router.router)
 
 
 @app.get("/health")

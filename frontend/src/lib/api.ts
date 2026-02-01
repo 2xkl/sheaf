@@ -102,4 +102,23 @@ export const adminApi = {
   stats: () => api.get<Stats>('/admin/stats'),
 };
 
+export interface StorageSettings {
+  storage_backend: string;
+  azure_connection_string_set: boolean;
+  azure_container_name: string | null;
+}
+
+export interface StorageSettingsUpdate {
+  storage_backend: string;
+  azure_account_name?: string | null;
+  azure_account_key?: string | null;
+  azure_container_name?: string | null;
+}
+
+export const settingsApi = {
+  getStorage: () => api.get<StorageSettings>('/settings/storage'),
+  updateStorage: (data: StorageSettingsUpdate) =>
+    api.put<StorageSettings>('/settings/storage', data),
+};
+
 export default api;
