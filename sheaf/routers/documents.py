@@ -105,6 +105,30 @@ async def download_document(
     )
 
 
+@router.get("/{doc_id}/view")
+async def view_document(
+    doc_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    storage: StorageBackend = Depends(get_storage),
+):
+    doc = await _get_doc_or_404(db, doc_id, user)
+
+    cache_key = f"pdf:{doc.id}"
+    cached = await cache_get(cache_key)
+    if cached is not None:
+        data = cached
+    else:
+        data = await storage.load(doc.storage_path)
+        await cache_set(cache_key, data)
+
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{doc.original_name}"'},
+    )
+
+
 @router.delete("/{doc_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_document(
     doc_id: str,

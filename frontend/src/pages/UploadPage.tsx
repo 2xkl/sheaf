@@ -36,7 +36,7 @@ export default function UploadPage() {
     <div>
       <h2 className="text-2xl font-bold mb-1">Upload PDF</h2>
       <p className="text-sm text-(--color-text-muted) mb-8">
-        Przeciagnij plik lub kliknij, zeby wybrac
+        Drag a file or click to select
       </p>
 
       <div className="max-w-xl">
@@ -78,7 +78,7 @@ export default function UploadPage() {
             <div className="flex flex-col items-center gap-2">
               <Upload size={40} className="text-(--color-text-muted)" />
               <p className="text-(--color-text-muted)">
-                Przeciagnij PDF tutaj lub kliknij
+                Drag a PDF here or click to browse
               </p>
             </div>
           )}
@@ -92,7 +92,7 @@ export default function UploadPage() {
               onChange={(e) => setIsPublic(e.target.checked)}
               className="w-4 h-4 rounded accent-(--color-primary)"
             />
-            Dokument publiczny
+            Public document
           </label>
         </div>
 
@@ -101,17 +101,17 @@ export default function UploadPage() {
           disabled={!file || uploading}
           className="mt-4 w-full py-2.5 rounded-lg bg-(--color-primary) text-white font-medium hover:bg-(--color-primary-hover) transition-colors disabled:opacity-50 cursor-pointer"
         >
-          {uploading ? 'Wysylanie...' : 'Wyslij PDF'}
+          {uploading ? 'Uploading...' : 'Upload PDF'}
         </button>
 
         {result === 'success' && (
           <div className="mt-4 p-3 rounded-lg bg-(--color-success)/10 text-(--color-success) text-sm flex items-center gap-2">
-            <CheckCircle size={18} /> PDF zostal przeslany pomyslnie
+            <CheckCircle size={18} /> PDF uploaded successfully
           </div>
         )}
         {result === 'error' && (
           <div className="mt-4 p-3 rounded-lg bg-(--color-danger)/10 text-(--color-danger) text-sm flex items-center gap-2">
-            <XCircle size={18} /> Blad podczas wysylania pliku
+            <XCircle size={18} /> Error uploading file
           </div>
         )}
       </div>

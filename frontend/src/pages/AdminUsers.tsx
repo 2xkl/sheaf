@@ -15,20 +15,20 @@ export default function AdminUsers() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-1">Uzytkownicy</h2>
+      <h2 className="text-2xl font-bold mb-1">Users</h2>
       <p className="text-sm text-(--color-text-muted) mb-8">
-        Zarzadzaj kontami uzytkownikow
+        Manage user accounts
       </p>
 
       <div className="bg-(--color-bg-card) border border-(--color-border) rounded-xl overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-(--color-border) text-left text-(--color-text-muted)">
-              <th className="px-5 py-3 font-medium">Uzytkownik</th>
-              <th className="px-5 py-3 font-medium">Rola</th>
+              <th className="px-5 py-3 font-medium">User</th>
+              <th className="px-5 py-3 font-medium">Role</th>
               <th className="px-5 py-3 font-medium">Status</th>
-              <th className="px-5 py-3 font-medium">Data utworzenia</th>
-              <th className="px-5 py-3 font-medium text-right">Akcje</th>
+              <th className="px-5 py-3 font-medium">Created</th>
+              <th className="px-5 py-3 font-medium text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-(--color-border)">
@@ -49,16 +49,16 @@ export default function AdminUsers() {
                 <td className="px-5 py-3">
                   {u.is_active ? (
                     <span className="inline-flex items-center gap-1 text-xs text-(--color-success)">
-                      <CheckCircle size={14} /> Aktywny
+                      <CheckCircle size={14} /> Active
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 text-xs text-(--color-danger)">
-                      <Ban size={14} /> Zablokowany
+                      <Ban size={14} /> Blocked
                     </span>
                   )}
                 </td>
                 <td className="px-5 py-3 text-(--color-text-muted)">
-                  {u.created_at ? new Date(u.created_at).toLocaleDateString('pl-PL') : '-'}
+                  {u.created_at ? new Date(u.created_at).toLocaleDateString('en-US') : '-'}
                 </td>
                 <td className="px-5 py-3 text-right">
                   {!u.is_admin && (
@@ -70,7 +70,7 @@ export default function AdminUsers() {
                           : 'text-(--color-success) hover:bg-(--color-success)/10'
                       }`}
                     >
-                      {u.is_active ? 'Zablokuj' : 'Odblokuj'}
+                      {u.is_active ? 'Block' : 'Unblock'}
                     </button>
                   )}
                 </td>

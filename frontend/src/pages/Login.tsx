@@ -19,7 +19,7 @@ export default function Login() {
       await login(username, password);
       navigate('/dashboard');
     } catch {
-      setError('Nieprawidlowa nazwa uzytkownika lub haslo');
+      setError('Invalid username or password');
     } finally {
       setLoading(false);
     }
@@ -42,7 +42,7 @@ export default function Login() {
         </div>
 
         <div className="bg-(--color-bg-card) border border-(--color-border) rounded-xl p-6 shadow-sm">
-          <h2 className="text-lg font-semibold mb-4">Zaloguj sie</h2>
+          <h2 className="text-lg font-semibold mb-4">Sign in</h2>
 
           {error && (
             <div className="mb-4 p-3 rounded-lg bg-(--color-danger)/10 text-(--color-danger) text-sm">
@@ -53,7 +53,7 @@ export default function Login() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1.5 text-(--color-text-muted)">
-                Nazwa uzytkownika
+                Username
               </label>
               <input
                 type="text"
@@ -65,7 +65,7 @@ export default function Login() {
             </div>
             <div>
               <label className="block text-sm font-medium mb-1.5 text-(--color-text-muted)">
-                Haslo
+                Password
               </label>
               <input
                 type="password"
@@ -80,14 +80,14 @@ export default function Login() {
               disabled={loading}
               className="w-full py-2.5 rounded-lg bg-(--color-primary) text-white font-medium hover:bg-(--color-primary-hover) transition-colors disabled:opacity-50 cursor-pointer"
             >
-              {loading ? 'Logowanie...' : 'Zaloguj'}
+              {loading ? 'Signing in...' : 'Sign in'}
             </button>
           </form>
 
           <p className="text-sm text-(--color-text-muted) text-center mt-4">
-            Nie masz konta?{' '}
+            Don't have an account?{' '}
             <Link to="/register" className="text-(--color-primary) hover:underline">
-              Zaloz konto
+              Create account
             </Link>
           </p>
         </div>

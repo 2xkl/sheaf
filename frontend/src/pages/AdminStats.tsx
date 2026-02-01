@@ -13,16 +13,16 @@ export default function AdminStats() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-1">Statystyki</h2>
+      <h2 className="text-2xl font-bold mb-1">Statistics</h2>
       <p className="text-sm text-(--color-text-muted) mb-8">
-        Ogolny przeglad platformy
+        Platform overview
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card icon={Users} label="Uzytkownicy" value={stats.users} />
-        <Card icon={FileText} label="Dokumenty" value={stats.documents} />
+        <Card icon={Users} label="Users" value={stats.users} />
+        <Card icon={FileText} label="Documents" value={stats.documents} />
         <Card icon={HardDrive} label="Storage" value={formatBytes(stats.total_size_bytes)} />
-        <Card icon={Download} label="Pobrania" value={stats.total_downloads} />
+        <Card icon={Download} label="Downloads" value={stats.total_downloads} />
       </div>
     </div>
   );

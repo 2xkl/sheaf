@@ -9,8 +9,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -19,6 +19,7 @@ wheels/
 .installed.cfg
 *.egg
 
+.claude
 .env
 .venv
 env/

@@ -27,7 +27,7 @@ export default function Sidebar() {
           <LayoutDashboard size={18} /> Dashboard
         </NavLink>
         <NavLink to="/documents" className={linkClass}>
-          <FileText size={18} /> Dokumenty
+          <FileText size={18} /> Documents
         </NavLink>
         <NavLink to="/upload" className={linkClass}>
           <Upload size={18} /> Upload
@@ -41,10 +41,10 @@ export default function Sidebar() {
               </span>
             </div>
             <NavLink to="/admin/users" className={linkClass}>
-              <Users size={18} /> Uzytkownicy
+              <Users size={18} /> Users
             </NavLink>
             <NavLink to="/admin/stats" className={linkClass}>
-              <BarChart3 size={18} /> Statystyki
+              <BarChart3 size={18} /> Statistics
             </NavLink>
           </>
         )}
@@ -62,7 +62,7 @@ export default function Sidebar() {
           <button
             onClick={logout}
             className="p-2 rounded-lg text-(--color-text-muted) hover:text-(--color-danger) hover:bg-(--color-bg-card) transition-colors cursor-pointer"
-            title="Wyloguj"
+            title="Logout"
           >
             <LogOut size={18} />
           </button>
