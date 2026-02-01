@@ -1,3 +1,8 @@
+import os
+
+# Override database URL before any sheaf module is imported
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./test.db"
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -32,3 +37,19 @@ async def client():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
+
+
+@pytest.fixture
+async def auth_client(client):
+    """Client with a registered and logged-in user."""
+    await client.post(
+        "/api/auth/register",
+        json={"username": "testuser", "password": "testpass123"},
+    )
+    resp = await client.post(
+        "/api/auth/login",
+        data={"username": "testuser", "password": "testpass123"},
+    )
+    token = resp.json()["access_token"]
+    client.headers["Authorization"] = f"Bearer {token}"
+    return client

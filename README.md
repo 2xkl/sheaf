@@ -86,6 +86,20 @@ docker compose exec -T postgres psql -U sheaf sheaf < backup.sql
 
 ---
 
+## Testing
+
+Tests run inside Docker — no local Python environment needed.
+
+```bash
+docker compose run --rm test
+```
+
+This builds a throwaway container, installs dev dependencies (`pytest`, `pytest-asyncio`, `httpx`, `ruff`), and runs the full test suite. Tests use SQLite in-memory (not PostgreSQL) so they don't touch your production database.
+
+The test service only runs on demand — it's excluded from `docker compose up` via Docker Compose profiles.
+
+---
+
 ## What It Does
 
 - **User accounts** — register, login (JWT auth), admin role
@@ -157,7 +171,7 @@ pdfflow/
 │   ├── Dockerfile             # Multi-stage: node build -> nginx serve
 │   └── nginx.conf             # Proxy /api/ to backend, SPA fallback
 │
-├── docker-compose.yml         # 4 services: app, frontend, postgres, redis
+├── docker-compose.yml         # 4 services + test runner: app, frontend, postgres, redis, test
 ├── Dockerfile                 # Backend container (python:3.12-slim)
 ├── pyproject.toml             # Python deps, build config
 └── .env                       # Active config (not committed)
