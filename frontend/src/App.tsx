@@ -1,7 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { OfflineProvider } from './context/OfflineContext';
 import Layout from './components/Layout';
+import OfflineIndicator from './components/OfflineIndicator';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
@@ -16,22 +18,25 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/read/:docId" element={<ReaderPage />} />
-            <Route element={<Layout />}>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/documents" element={<Documents />} />
-              <Route path="/upload" element={<UploadPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/admin/users" element={<AdminUsers />} />
-              <Route path="/admin/stats" element={<AdminStats />} />
-            </Route>
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
-        </BrowserRouter>
+        <OfflineProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/read/:docId" element={<ReaderPage />} />
+              <Route element={<Layout />}>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/documents" element={<Documents />} />
+                <Route path="/upload" element={<UploadPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/admin/users" element={<AdminUsers />} />
+                <Route path="/admin/stats" element={<AdminStats />} />
+              </Route>
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+            <OfflineIndicator />
+          </BrowserRouter>
+        </OfflineProvider>
       </AuthProvider>
     </ThemeProvider>
   );

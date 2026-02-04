@@ -113,6 +113,32 @@ The test service only runs on demand — it's excluded from `docker compose up` 
 - **Public sharing** — public documents get a shareable download link
 - **Storage backends** — local filesystem (default), Azure Blob Storage (configurable per user in Settings)
 - **Mobile responsive** — hamburger menu, touch gestures, swipe navigation
+- **Offline mode (PWA)** — save documents for offline reading, progress syncs when back online
+
+---
+
+## Offline Mode
+
+Sheaf is a Progressive Web App (PWA) that works offline after initial load.
+
+### How it works
+
+1. **Save documents offline** — click the download icon next to any document to save it locally
+2. **Read offline** — saved documents are available even without internet connection
+3. **Progress tracking** — reading progress is saved locally and syncs when you're back online
+4. **Install as app** — add Sheaf to your home screen for app-like experience
+
+### Storage
+
+- Documents are stored in IndexedDB (browser storage)
+- Storage limit depends on browser/device (~50% of free disk space)
+- Offline indicator shows connection status and pending syncs
+
+### Technical details
+
+- Service Worker caches static assets (JS, CSS, HTML)
+- Dexie.js manages IndexedDB for document storage
+- Background sync queues reading progress updates
 
 ---
 
@@ -250,3 +276,25 @@ Users can configure their own Azure Blob Storage credentials in **Settings > Sto
 - **Frontend PDF viewer** — `pdfjs-dist` canvas rendering with HiDPI support, immersive/fullscreen mode
 - **Theme system** — Tailwind CSS v4 `@theme` block with CSS custom properties, 4 variants
 - **Docker networking** — frontend nginx proxies `/api/` to backend, Postgres and Redis only accessible internally
+
+---
+
+## Roadmap
+
+### OCR Integration (planned)
+
+Text extraction from scanned PDFs and images:
+
+- **Tesseract OCR** — open-source OCR engine
+- **Full-text search** — search within scanned documents
+- **Text layer overlay** — select and copy text from scanned pages
+- **Language support** — configurable OCR languages
+
+### Calibre Integration (planned)
+
+E-book library management integration:
+
+- **Import from Calibre** — sync books from Calibre library
+- **Metadata sync** — author, title, series, tags from Calibre
+- **Format conversion** — convert EPUB, MOBI to PDF via Calibre
+- **Calibre Content Server** — connect to remote Calibre instance
