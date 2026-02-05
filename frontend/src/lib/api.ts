@@ -39,6 +39,14 @@ export interface Document {
   download_count: number;
   created_at: string;
   owner_id: string;
+  // OCR fields
+  ocr_status?: string;
+  ocr_error?: string | null;
+  text_extracted_at?: string | null;
+  has_text?: boolean;
+  // Calibre fields
+  calibre_id?: string | null;
+  calibre_metadata?: Record<string, unknown> | null;
 }
 
 export interface DocumentList {
@@ -119,6 +127,83 @@ export const settingsApi = {
   getStorage: () => api.get<StorageSettings>('/settings/storage'),
   updateStorage: (data: StorageSettingsUpdate) =>
     api.put<StorageSettings>('/settings/storage', data),
+};
+
+// OCR types and API
+export interface OCRStatus {
+  doc_id: string;
+  ocr_status: string;
+  ocr_error?: string | null;
+  text_extracted_at?: string | null;
+  has_text: boolean;
+}
+
+export interface OCRText {
+  doc_id: string;
+  extracted_text?: string | null;
+  text_length: number;
+}
+
+export const ocrApi = {
+  start: (docId: string) => api.post<{ doc_id: string; message: string; ocr_status: string }>(`/ocr/${docId}/start`),
+  status: (docId: string) => api.get<OCRStatus>(`/ocr/${docId}/status`),
+  text: (docId: string) => api.get<OCRText>(`/ocr/${docId}/text`),
+};
+
+// Search types and API
+export interface SearchResultItem {
+  id: string;
+  original_name: string;
+  snippet: string;
+  rank: number;
+}
+
+export interface SearchResponse {
+  query: string;
+  total: number;
+  items: SearchResultItem[];
+}
+
+export const searchApi = {
+  search: (query: string, limit = 20, offset = 0) =>
+    api.get<SearchResponse>('/search', { params: { q: query, limit, offset } }),
+};
+
+// Calibre types and API
+export interface CalibreBook {
+  id: string;
+  title: string;
+  authors: string[];
+  series?: string | null;
+  series_index?: number | null;
+  tags: string[];
+  formats: string[];
+  cover_url?: string | null;
+  source: string;
+}
+
+export interface CalibreBooksResponse {
+  items: CalibreBook[];
+  total: number;
+}
+
+export interface CalibreStatus {
+  local_enabled: boolean;
+  local_connected: boolean;
+  local_book_count: number;
+  server_enabled: boolean;
+  server_connected: boolean;
+}
+
+export const calibreApi = {
+  status: () => api.get<CalibreStatus>('/calibre/status'),
+  books: (limit = 100, offset = 0, source: 'all' | 'local' | 'server' = 'all') =>
+    api.get<CalibreBooksResponse>('/calibre/books', { params: { limit, offset, source } }),
+  import: (calibreId: string, format = 'PDF') =>
+    api.post<{ document_id: string; original_name: string; message: string }>(
+      `/calibre/import/${encodeURIComponent(calibreId)}`,
+      { format }
+    ),
 };
 
 export default api;

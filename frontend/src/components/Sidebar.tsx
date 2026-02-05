@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { FileText, Upload, LayoutDashboard, Users, BarChart3, LogOut, X, Settings } from 'lucide-react';
+import { FileText, Upload, LayoutDashboard, Users, BarChart3, LogOut, X, Settings, Search, BookOpen } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import ThemeSwitcher from './ThemeSwitcher';
 
@@ -46,8 +46,14 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
         <NavLink to="/documents" className={linkClass} onClick={handleNavClick}>
           <FileText size={18} /> Documents
         </NavLink>
+        <NavLink to="/search" className={linkClass} onClick={handleNavClick}>
+          <Search size={18} /> Search
+        </NavLink>
         <NavLink to="/upload" className={linkClass} onClick={handleNavClick}>
           <Upload size={18} /> Upload
+        </NavLink>
+        <NavLink to="/calibre" className={linkClass} onClick={handleNavClick}>
+          <BookOpen size={18} /> Calibre
         </NavLink>
         <NavLink to="/settings" className={linkClass} onClick={handleNavClick}>
           <Settings size={18} /> Settings

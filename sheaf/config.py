@@ -31,5 +31,17 @@ class Settings(BaseSettings):
     admin_username: str = "admin"
     admin_password: str = "admin"
 
+    # OCR
+    ocr_enabled: bool = True
+    ocr_language: str = "eng+pol"
+    ocr_timeout: int = 300
+
+    # Calibre
+    calibre_enabled: bool = True
+    calibre_library_path: str = ""
+    calibre_server_url: str = ""
+    calibre_server_username: str = ""
+    calibre_server_password: str = ""
+
 
 settings = Settings()

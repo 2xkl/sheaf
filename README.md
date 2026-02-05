@@ -107,6 +107,9 @@ The test service only runs on demand — it's excluded from `docker compose up` 
 - **In-browser PDF reader** — zoom, page navigation, keyboard arrows, immersive/fullscreen mode
 - **Reading progress** — saves which page you stopped on, per document per user
 - **Continue reading** — dashboard shows recently read documents with progress bars
+- **OCR on-demand** — extract text from PDFs using Tesseract, makes documents searchable
+- **Full-text search** — search within OCR-extracted text (PostgreSQL FTS)
+- **Calibre integration** — import books from local Calibre library or Content Server
 - **Admin panel** — user management (block/unblock), platform statistics
 - **4 color themes** — light, dark, high-contrast, sepia
 - **PDF caching** — Redis cache for fast repeated access
@@ -234,6 +237,25 @@ pdfflow/
 | GET    | /api/settings/storage     | Get user's storage configuration     |
 | PUT    | /api/settings/storage     | Update storage backend + credentials |
 
+### OCR (requires auth)
+| Method | Endpoint                     | Description                    |
+|--------|------------------------------|--------------------------------|
+| POST   | /api/ocr/{doc_id}/start      | Start OCR processing           |
+| GET    | /api/ocr/{doc_id}/status     | Get OCR status                 |
+| GET    | /api/ocr/{doc_id}/text       | Get extracted text             |
+
+### Search (requires auth)
+| Method | Endpoint             | Description                         |
+|--------|----------------------|-------------------------------------|
+| GET    | /api/search?q=...    | Full-text search in documents       |
+
+### Calibre (requires auth)
+| Method | Endpoint                        | Description                    |
+|--------|---------------------------------|--------------------------------|
+| GET    | /api/calibre/status             | Get Calibre connection status  |
+| GET    | /api/calibre/books              | List books from Calibre        |
+| POST   | /api/calibre/import/{calibre_id}| Import book to Sheaf           |
+
 ### Admin (requires admin role)
 | Method | Endpoint                              | Description          |
 |--------|---------------------------------------|----------------------|
@@ -262,6 +284,14 @@ pdfflow/
 | ADMIN_PASSWORD                   | admin                                                | Default admin password         |
 | AZURE_STORAGE_CONNECTION_STRING  |                                                      | Global Azure fallback          |
 | AZURE_STORAGE_CONTAINER          | sheaf-pdfs                                           | Global Azure container name    |
+| OCR_ENABLED                      | true                                                 | Enable OCR feature             |
+| OCR_LANGUAGE                     | eng+pol                                              | Tesseract language codes       |
+| OCR_TIMEOUT                      | 300                                                  | OCR timeout in seconds         |
+| CALIBRE_ENABLED                  | true                                                 | Enable Calibre integration     |
+| CALIBRE_LIBRARY_PATH             |                                                      | Path to local Calibre library  |
+| CALIBRE_SERVER_URL               |                                                      | Calibre Content Server URL     |
+| CALIBRE_SERVER_USERNAME          |                                                      | Server auth username           |
+| CALIBRE_SERVER_PASSWORD          |                                                      | Server auth password           |
 
 Users can configure their own Azure Blob Storage credentials in **Settings > Storage** — this overrides the global `STORAGE_BACKEND` for that user. Each document remembers which backend it was uploaded to.
 

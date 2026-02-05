@@ -57,6 +57,23 @@ services:
     profiles:
       - test
 
+  calibre:
+    image: lscr.io/linuxserver/calibre:latest
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Warsaw
+    volumes:
+      - calibre_config:/config
+      - calibre_library:/books
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    profiles:
+      - calibre
+
 volumes:
   pdf_storage:
   pg_data:
+  calibre_config:
+  calibre_library:
