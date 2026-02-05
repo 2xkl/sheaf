@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download, Trash2, Globe, Lock, Copy, Check, BookOpen } from 'lucide-react';
-import { docsApi, type Document } from '../lib/api';
+import { Download, Trash2, Globe, Lock, Copy, Check, BookOpen, ScanText, Loader2, FileSearch } from 'lucide-react';
+import { docsApi, ocrApi, type Document } from '../lib/api';
 
 export default function Documents() {
   const navigate = useNavigate();
   const [docs, setDocs] = useState<Document[]>([]);
   const [total, setTotal] = useState(0);
   const [copied, setCopied] = useState<string | null>(null);
+  const [ocrLoading, setOcrLoading] = useState<string | null>(null);
 
   const load = () => {
     docsApi.list(0, 200).then((r) => {
@@ -17,6 +18,27 @@ export default function Documents() {
   };
 
   useEffect(load, []);
+
+  const handleStartOcr = async (docId: string) => {
+    setOcrLoading(docId);
+    try {
+      await ocrApi.start(docId);
+      // Poll for status updates
+      const pollStatus = async () => {
+        const { data } = await ocrApi.status(docId);
+        if (data.ocr_status === 'completed' || data.ocr_status === 'failed') {
+          load();
+          setOcrLoading(null);
+        } else {
+          setTimeout(pollStatus, 2000);
+        }
+      };
+      pollStatus();
+    } catch {
+      setOcrLoading(null);
+      alert('Failed to start OCR');
+    }
+  };
 
   const handleDownload = async (doc: Document) => {
     const { data } = await docsApi.download(doc.id);
@@ -66,6 +88,7 @@ export default function Documents() {
                   <th className="px-5 py-3 font-medium">Size</th>
                   <th className="px-5 py-3 font-medium">Date</th>
                   <th className="px-5 py-3 font-medium">Status</th>
+                  <th className="px-5 py-3 font-medium">OCR</th>
                   <th className="px-5 py-3 font-medium">Downloads</th>
                   <th className="px-5 py-3 font-medium text-right">Actions</th>
                 </tr>
@@ -96,6 +119,29 @@ export default function Documents() {
                         <span className="inline-flex items-center gap-1 text-xs text-(--color-text-muted)">
                           <Lock size={14} /> Private
                         </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3">
+                      {doc.has_text ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-(--color-success)">
+                          <FileSearch size={14} /> Searchable
+                        </span>
+                      ) : doc.ocr_status === 'processing' || doc.ocr_status === 'pending' || ocrLoading === doc.id ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-(--color-accent)">
+                          <Loader2 size={14} className="animate-spin" /> Processing
+                        </span>
+                      ) : doc.ocr_status === 'failed' ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-(--color-danger)">
+                          Failed
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleStartOcr(doc.id)}
+                          disabled={ocrLoading !== null}
+                          className="inline-flex items-center gap-1 text-xs text-(--color-primary) hover:underline disabled:opacity-50 cursor-pointer"
+                        >
+                          <ScanText size={14} /> Run OCR
+                        </button>
                       )}
                     </td>
                     <td className="px-5 py-3 text-(--color-text-muted)">{doc.download_count}</td>
@@ -164,6 +210,11 @@ export default function Documents() {
                       <Lock size={12} /> Private
                     </span>
                   )}
+                  {doc.has_text && (
+                    <span className="inline-flex items-center gap-1 text-(--color-success)">
+                      <FileSearch size={12} /> Searchable
+                    </span>
+                  )}
                 </div>
                 <div className="mt-3 flex items-center gap-2">
                   <button
@@ -178,6 +229,21 @@ export default function Documents() {
                   >
                     <Download size={14} /> Download
                   </button>
+                  {!doc.has_text && doc.ocr_status !== 'processing' && doc.ocr_status !== 'pending' && ocrLoading !== doc.id && (
+                    <button
+                      onClick={() => handleStartOcr(doc.id)}
+                      disabled={ocrLoading !== null}
+                      className="p-2 rounded-lg text-(--color-primary) hover:bg-(--color-primary-light) transition-colors cursor-pointer disabled:opacity-50"
+                      title="Run OCR"
+                    >
+                      <ScanText size={16} />
+                    </button>
+                  )}
+                  {(doc.ocr_status === 'processing' || doc.ocr_status === 'pending' || ocrLoading === doc.id) && (
+                    <div className="p-2">
+                      <Loader2 size={16} className="animate-spin text-(--color-accent)" />
+                    </div>
+                  )}
                   {doc.is_public && (
                     <button
                       onClick={() => handleCopyLink(doc)}

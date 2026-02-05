@@ -16,6 +16,10 @@ dependencies = [
     "pydantic-settings>=2.6,<3",
     "redis>=5.2,<6",
     "aiofiles>=24.1,<25",
+    "pytesseract>=0.3.10,<1",
+    "pdf2image>=1.16,<2",
+    "Pillow>=10.0,<11",
+    "httpx>=0.27,<1",
 ]
 
 [project.optional-dependencies]

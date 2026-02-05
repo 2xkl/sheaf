@@ -40,13 +40,34 @@ async def _migrate_columns(conn) -> None:
         ("users", "storage_backend", "VARCHAR(20) DEFAULT 'local'"),
         ("users", "azure_connection_string", "VARCHAR(500)"),
         ("users", "azure_container_name", "VARCHAR(200)"),
+        # OCR fields
+        ("documents", "extracted_text", "TEXT"),
+        ("documents", "ocr_status", "VARCHAR(20) DEFAULT 'none'"),
+        ("documents", "ocr_error", "VARCHAR(500)"),
+        ("documents", "text_extracted_at", "TIMESTAMP"),
+        # Calibre fields
+        ("documents", "calibre_id", "VARCHAR(100)"),
+        ("documents", "calibre_metadata", "JSON"),
     ]
     for table, column, col_type in migrations:
         if not await _column_exists(conn, table, column):
             await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
 
 
+async def _create_fts_index(conn) -> None:
+    """Create PostgreSQL full-text search index on documents.extracted_text."""
+    if "postgresql" not in settings.database_url:
+        return
+    await conn.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS idx_documents_fts "
+            "ON documents USING GIN (to_tsvector('english', COALESCE(extracted_text, '')))"
+        )
+    )
+
+
 async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await _migrate_columns(conn)
+        await _create_fts_index(conn)
