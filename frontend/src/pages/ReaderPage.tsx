@@ -10,16 +10,20 @@ import {
   AlertTriangle,
   Maximize,
   Minimize,
+  WifiOff,
 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import api, { docsApi, progressApi, type Document as DocType } from '../lib/api';
+import { useOfflineContext } from '../context/OfflineContext';
+import { offlineDb } from '../lib/offlineDb';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 export default function ReaderPage() {
   const { docId } = useParams<{ docId: string }>();
   const navigate = useNavigate();
+  const { isOnline, isDocumentOffline, getOfflinePdf, saveProgressOffline } = useOfflineContext();
 
   const [doc, setDoc] = useState<DocType | null>(null);
   const [numPages, setNumPages] = useState(0);
@@ -29,6 +33,7 @@ export default function ReaderPage() {
   const [rendering, setRendering] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [immersive, setImmersive] = useState(false);
+  const [isLoadedOffline, setIsLoadedOffline] = useState(false);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -42,7 +47,6 @@ export default function ReaderPage() {
   pageRef.current = page;
   numPagesRef.current = numPages;
 
-  // Fullscreen API helpers
   const canFullscreen = typeof document.documentElement.requestFullscreen === 'function';
 
   const enterFullscreen = useCallback(() => {
@@ -59,7 +63,6 @@ export default function ReaderPage() {
     }
   }, [canFullscreen]);
 
-  // Sync immersive state when user exits fullscreen via Escape / browser UI
   useEffect(() => {
     const handleChange = () => {
       if (!document.fullscreenElement) {
@@ -70,10 +73,8 @@ export default function ReaderPage() {
     return () => document.removeEventListener('fullscreenchange', handleChange);
   }, []);
 
-  // Tap on canvas area toggles immersive mode
   const handleCanvasTap = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
-      // Only toggle on direct taps (not on controls inside the area)
       if (e.target === containerRef.current || e.target === canvasRef.current) {
         if (immersive) {
           exitFullscreen();
@@ -82,7 +83,7 @@ export default function ReaderPage() {
         }
       }
     },
-    [immersive, enterFullscreen, exitFullscreen],
+    [immersive, enterFullscreen, exitFullscreen]
   );
 
   // Load PDF document
@@ -99,29 +100,66 @@ export default function ReaderPage() {
 
     (async () => {
       try {
-        const [docRes, progRes, pdfRes] = await Promise.all([
-          docsApi.get(docId),
-          progressApi.get(docId).catch(() => ({ data: null })),
-          api.get(`/documents/${docId}/view`, { responseType: 'arraybuffer' }),
-        ]);
+        let pdfData: ArrayBuffer;
+        let docData: DocType;
+        const isAvailableOffline = isDocumentOffline(docId);
+
+        if (!isOnline && !isAvailableOffline) {
+          throw new Error('Document not available offline');
+        }
+
+        if (!isOnline || (!navigator.onLine && isAvailableOffline)) {
+          // Load from IndexedDB
+          const offlinePdf = await getOfflinePdf(docId);
+          if (!offlinePdf) {
+            throw new Error('Offline document not found');
+          }
+          pdfData = offlinePdf;
+
+          const offlineDoc = await offlineDb.documents.get(docId);
+          if (!offlineDoc) {
+            throw new Error('Offline document metadata not found');
+          }
+          docData = offlineDoc as DocType;
+          setIsLoadedOffline(true);
+        } else {
+          // Load from API
+          const [docRes, pdfRes] = await Promise.all([
+            docsApi.get(docId),
+            api.get(`/documents/${docId}/view`, { responseType: 'arraybuffer' }),
+          ]);
+          docData = docRes.data;
+          pdfData = pdfRes.data;
+        }
 
         if (cancelled) return;
 
-        setDoc(docRes.data);
+        setDoc(docData);
 
-        const pdfDoc = await pdfjsLib.getDocument({ data: pdfRes.data }).promise;
+        const pdfDoc = await pdfjsLib.getDocument({ data: pdfData }).promise;
         if (cancelled) return;
 
         pdfDocRef.current = pdfDoc;
         setNumPages(pdfDoc.numPages);
 
-        const startPage =
-          progRes.data && progRes.data.current_page > 0
-            ? Math.min(progRes.data.current_page, pdfDoc.numPages)
-            : 1;
+        // Try to get progress from API
+        let startPage = 1;
+        if (isOnline) {
+          try {
+            const progRes = await progressApi.get(docId);
+            if (progRes.data && progRes.data.current_page > 0) {
+              startPage = Math.min(progRes.data.current_page, pdfDoc.numPages);
+            }
+          } catch {
+            // Progress not available
+          }
+        }
+
         setPage(startPage);
 
-        progressApi.save(docId, startPage, pdfDoc.numPages).catch(() => {});
+        if (isOnline) {
+          progressApi.save(docId, startPage, pdfDoc.numPages).catch(() => {});
+        }
 
         setLoading(false);
       } catch (err: unknown) {
@@ -136,7 +174,7 @@ export default function ReaderPage() {
     return () => {
       cancelled = true;
     };
-  }, [docId, navigate]);
+  }, [docId, navigate, isOnline, isDocumentOffline, getOfflinePdf]);
 
   // Render current page to canvas
   useEffect(() => {
@@ -167,9 +205,7 @@ export default function ReaderPage() {
         canvas.height = viewport.height * dpr;
 
         const container = containerRef.current;
-        const maxDisplayWidth = container
-          ? container.clientWidth - 32
-          : viewport.width;
+        const maxDisplayWidth = container ? container.clientWidth - 32 : viewport.width;
         const displayWidth = Math.min(viewport.width, maxDisplayWidth);
         const displayScale = displayWidth / viewport.width;
         const displayHeight = viewport.height * displayScale;
@@ -200,8 +236,17 @@ export default function ReaderPage() {
   // Save progress (debounced)
   const saveProgress = useCallback(() => {
     if (!docId || numPagesRef.current === 0) return;
-    progressApi.save(docId, pageRef.current, numPagesRef.current).catch(() => {});
-  }, [docId]);
+
+    if (isOnline) {
+      progressApi.save(docId, pageRef.current, numPagesRef.current).catch(() => {
+        // If API fails, queue for later
+        saveProgressOffline(docId, pageRef.current, numPagesRef.current);
+      });
+    } else {
+      // Offline: queue for sync
+      saveProgressOffline(docId, pageRef.current, numPagesRef.current);
+    }
+  }, [docId, isOnline, saveProgressOffline]);
 
   useEffect(() => {
     if (numPages === 0) return;
@@ -254,7 +299,6 @@ export default function ReaderPage() {
     const dy = t.clientY - touchStartRef.current.y;
     touchStartRef.current = null;
 
-    // Only horizontal swipes, not taps or vertical scrolls
     if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
       if (dx < 0) {
         setPage((p) => Math.min(numPagesRef.current, p + 1));
@@ -294,17 +338,17 @@ export default function ReaderPage() {
   }
 
   return (
-    <div
-      ref={wrapperRef}
-      className="bg-bg flex flex-col"
-      style={{ height: '100dvh' }}
-    >
+    <div ref={wrapperRef} className="bg-bg flex flex-col" style={{ height: '100dvh' }}>
       {/* Top toolbar */}
       <div
         className={`bg-bg-card border-b border-border flex items-center px-3 md:px-4 gap-2 md:gap-4 shrink-0 transition-all duration-300 overflow-hidden ${
           immersive ? 'max-h-0 border-b-0' : 'max-h-20'
         }`}
-        style={!immersive ? { paddingTop: 'env(safe-area-inset-top, 0px)', minHeight: '3rem' } : { minHeight: 0 }}
+        style={
+          !immersive
+            ? { paddingTop: 'env(safe-area-inset-top, 0px)', minHeight: '3rem' }
+            : { minHeight: 0 }
+        }
       >
         <button
           onClick={goBack}
@@ -316,6 +360,13 @@ export default function ReaderPage() {
         <span className="text-sm font-medium text-text truncate flex-1">
           {doc?.original_name ?? 'PDF'}
         </span>
+
+        {(isLoadedOffline || !isOnline) && (
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-100 dark:bg-amber-900/30">
+            <WifiOff className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+            <span className="text-xs font-medium text-amber-700 dark:text-amber-300">Offline</span>
+          </div>
+        )}
 
         <div className="flex items-center gap-1 text-sm text-text-muted">
           <span className="hidden sm:inline">
@@ -363,7 +414,11 @@ export default function ReaderPage() {
         className={`bg-bg-card border-t border-border flex items-center justify-center gap-2 md:gap-4 shrink-0 px-3 md:px-4 transition-all duration-300 overflow-hidden ${
           immersive ? 'max-h-0 border-t-0' : 'max-h-20'
         }`}
-        style={!immersive ? { paddingBottom: 'env(safe-area-inset-bottom, 0px)', minHeight: '3rem' } : { minHeight: 0 }}
+        style={
+          !immersive
+            ? { paddingBottom: 'env(safe-area-inset-bottom, 0px)', minHeight: '3rem' }
+            : { minHeight: 0 }
+        }
       >
         {/* Zoom controls */}
         <button
@@ -373,9 +428,7 @@ export default function ReaderPage() {
         >
           <Minus className="w-4 h-4" />
         </button>
-        <span className="text-xs text-text-muted w-10 text-center">
-          {Math.round(scale * 100)}%
-        </span>
+        <span className="text-xs text-text-muted w-10 text-center">{Math.round(scale * 100)}%</span>
         <button
           onClick={() => setScale((s) => Math.min(3, +(s + 0.2).toFixed(1)))}
           className="p-1.5 rounded hover:bg-bg transition-colors text-text-muted hover:text-text"

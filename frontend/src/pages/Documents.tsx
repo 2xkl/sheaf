@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download, Trash2, Globe, Lock, Copy, Check, BookOpen, ScanText, Loader2, FileSearch } from 'lucide-react';
+import { Download, Trash2, Globe, Lock, Copy, Check, BookOpen, ScanText, Loader2, FileSearch, WifiOff } from 'lucide-react';
 import { docsApi, ocrApi, type Document } from '../lib/api';
+import { useOfflineContext } from '../context/OfflineContext';
+import SaveOfflineButton from '../components/SaveOfflineButton';
 
 export default function Documents() {
   const navigate = useNavigate();
@@ -9,15 +11,26 @@ export default function Documents() {
   const [total, setTotal] = useState(0);
   const [copied, setCopied] = useState<string | null>(null);
   const [ocrLoading, setOcrLoading] = useState<string | null>(null);
+  const { isOnline, offlineDocuments, isDocumentOffline } = useOfflineContext();
 
   const load = () => {
+    if (!isOnline) {
+      const offlineDocs = offlineDocuments.map((od) => ({
+        ...od,
+        download_count: 0,
+      }));
+      setDocs(offlineDocs);
+      setTotal(offlineDocs.length);
+      return;
+    }
+
     docsApi.list(0, 200).then((r) => {
       setDocs(r.data.items);
       setTotal(r.data.total);
     });
   };
 
-  useEffect(load, []);
+  useEffect(load, [isOnline, offlineDocuments]);
 
   const handleStartOcr = async (docId: string) => {
     setOcrLoading(docId);
@@ -69,13 +82,22 @@ export default function Documents() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold">Documents</h2>
-          <p className="text-sm text-(--color-text-muted)">{total} files</p>
+          <p className="text-sm text-(--color-text-muted)">
+            {total} files
+            {!isOnline && (
+              <span className="ml-2 inline-flex items-center gap-1 text-amber-600">
+                <WifiOff size={12} /> Offline mode
+              </span>
+            )}
+          </p>
         </div>
       </div>
 
       {docs.length === 0 ? (
         <div className="bg-(--color-bg-card) border border-(--color-border) rounded-xl p-12 text-center">
-          <p className="text-(--color-text-muted)">No documents</p>
+          <p className="text-(--color-text-muted)">
+            {isOnline ? 'No documents' : 'No offline documents'}
+          </p>
         </div>
       ) : (
         <>
@@ -97,12 +119,22 @@ export default function Documents() {
                 {docs.map((doc) => (
                   <tr key={doc.id} className="hover:bg-(--color-bg-sidebar) transition-colors">
                     <td className="px-5 py-3 max-w-[250px]">
-                      <button
-                        onClick={() => navigate(`/read/${doc.id}`)}
-                        className="font-medium truncate block text-left hover:text-(--color-primary) transition-colors cursor-pointer"
-                      >
-                        {doc.original_name}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => navigate(`/read/${doc.id}`)}
+                          className="font-medium truncate block text-left hover:text-(--color-primary) transition-colors cursor-pointer"
+                        >
+                          {doc.original_name}
+                        </button>
+                        {isDocumentOffline(doc.id) && (
+                          <span
+                            className="shrink-0 inline-flex items-center gap-1 text-xs text-green-500"
+                            title="Available offline"
+                          >
+                            <WifiOff size={12} />
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-5 py-3 text-(--color-text-muted)">
                       {formatBytes(doc.size_bytes)}
@@ -147,6 +179,7 @@ export default function Documents() {
                     <td className="px-5 py-3 text-(--color-text-muted)">{doc.download_count}</td>
                     <td className="px-5 py-3">
                       <div className="flex items-center justify-end gap-1">
+                        {isOnline && <SaveOfflineButton document={doc} />}
                         {doc.is_public && (
                           <button
                             onClick={() => handleCopyLink(doc)}
@@ -163,20 +196,24 @@ export default function Documents() {
                         >
                           <BookOpen size={16} />
                         </button>
-                        <button
-                          onClick={() => handleDownload(doc)}
-                          title="Download"
-                          className="p-1.5 rounded-lg text-(--color-text-muted) hover:text-(--color-primary) hover:bg-(--color-primary-light) transition-colors cursor-pointer"
-                        >
-                          <Download size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(doc.id)}
-                          title="Delete"
-                          className="p-1.5 rounded-lg text-(--color-text-muted) hover:text-(--color-danger) hover:bg-(--color-danger)/10 transition-colors cursor-pointer"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        {isOnline && (
+                          <>
+                            <button
+                              onClick={() => handleDownload(doc)}
+                              title="Download"
+                              className="p-1.5 rounded-lg text-(--color-text-muted) hover:text-(--color-primary) hover:bg-(--color-primary-light) transition-colors cursor-pointer"
+                            >
+                              <Download size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(doc.id)}
+                              title="Delete"
+                              className="p-1.5 rounded-lg text-(--color-text-muted) hover:text-(--color-danger) hover:bg-(--color-danger)/10 transition-colors cursor-pointer"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -192,12 +229,19 @@ export default function Documents() {
                 key={doc.id}
                 className="bg-(--color-bg-card) border border-(--color-border) rounded-xl p-4"
               >
-                <button
-                  onClick={() => navigate(`/read/${doc.id}`)}
-                  className="text-sm font-medium truncate block text-left hover:text-(--color-primary) transition-colors cursor-pointer w-full"
-                >
-                  {doc.original_name}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => navigate(`/read/${doc.id}`)}
+                    className="text-sm font-medium truncate block text-left hover:text-(--color-primary) transition-colors cursor-pointer flex-1"
+                  >
+                    {doc.original_name}
+                  </button>
+                  {isDocumentOffline(doc.id) && (
+                    <span className="shrink-0 text-green-500" title="Available offline">
+                      <WifiOff size={14} />
+                    </span>
+                  )}
+                </div>
                 <div className="mt-2 flex items-center gap-3 text-xs text-(--color-text-muted)">
                   <span>{formatBytes(doc.size_bytes)}</span>
                   <span>{new Date(doc.created_at).toLocaleDateString('en-US')}</span>
@@ -223,13 +267,18 @@ export default function Documents() {
                   >
                     <BookOpen size={14} /> Read
                   </button>
-                  <button
-                    onClick={() => handleDownload(doc)}
-                    className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium bg-(--color-bg) text-(--color-text-muted) cursor-pointer"
-                  >
-                    <Download size={14} /> Download
-                  </button>
-                  {!doc.has_text && doc.ocr_status !== 'processing' && doc.ocr_status !== 'pending' && ocrLoading !== doc.id && (
+                  {isOnline && (
+                    <>
+                      <SaveOfflineButton document={doc} variant="full" />
+                      <button
+                        onClick={() => handleDownload(doc)}
+                        className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium bg-(--color-bg) text-(--color-text-muted) cursor-pointer"
+                      >
+                        <Download size={14} /> Download
+                      </button>
+                    </>
+                  )}
+                  {isOnline && !doc.has_text && doc.ocr_status !== 'processing' && doc.ocr_status !== 'pending' && ocrLoading !== doc.id && (
                     <button
                       onClick={() => handleStartOcr(doc.id)}
                       disabled={ocrLoading !== null}
@@ -253,13 +302,15 @@ export default function Documents() {
                       {copied === doc.id ? <Check size={16} /> : <Copy size={16} />}
                     </button>
                   )}
-                  <button
-                    onClick={() => handleDelete(doc.id)}
-                    className="p-2 rounded-lg text-(--color-text-muted) hover:text-(--color-danger) transition-colors cursor-pointer"
-                    title="Delete"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  {isOnline && (
+                    <button
+                      onClick={() => handleDelete(doc.id)}
+                      className="p-2 rounded-lg text-(--color-text-muted) hover:text-(--color-danger) transition-colors cursor-pointer"
+                      title="Delete"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
